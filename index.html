@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sales Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <script type="module">
+    // Firebase SDK
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, push, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAvj20SkBJDs3S9K6dU4EbFNz2K_dni7bc",
+      authDomain: "sales-tracking-3a652.firebaseapp.com",
+      projectId: "sales-tracking-3a652",
+      storageBucket: "sales-tracking-3a652.appspot.com",
+      messagingSenderId: "25831699121",
+      appId: "1:25831699121:web:0feeb1990b6a47942ce890",
+      measurementId: "G-96VFZL3S4W",
+      databaseURL: "https://sales-tracking-3a652-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    window.firebaseDB = db;
+    window.firebaseRef = ref;
+    window.firebasePush = push;
+    window.firebaseSet = set;
+    window.firebaseOnValue = onValue;
+  </script>
+  <style>
+    * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+    body { margin: 0; background: #121212; color: #f1f1f1; display: flex; height: 100vh; }
+    .sidebar { flex: 1; max-width: 500px; padding: 30px; background: #1e1e1e; overflow-y: auto; }
+    h1 { font-size: 24px; font-weight: 600; }
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    label { font-weight: 600; }
+    input, select, button { padding: 10px; border-radius: 4px; border: 1px solid #555; background: #333; color: #fff; }
+    button.add-btn { background: #4CAF50; cursor: pointer; margin-top: 10px; }
+    .main-content { flex: 2; padding: 30px; display: flex; flex-direction: column; overflow-y: auto; }
+    .filter-section { margin-bottom: 20px; }
+    canvas { background: #1e1e1e; border-radius: 12px; width: 100%; max-height: 400px; }
+    table { width: 100%; color: white; border-collapse: collapse; margin-top: 20px; }
+    td, th { border: 1px solid #444; padding: 8px; }
+    input[type="number"], input[type="date"] { width: 100%; }
+  </style>
+</head>
+<body>
+  <!-- (HTML structure remains unchanged) -->
+
+  <!-- insert the original HTML content here without modification -->
+
+  <script type="module">
+    const dataStore = [];
+    const db = window.firebaseDB;
+    const dbRef = window.firebaseRef;
+    const dbPush = window.firebasePush;
+    const dbSet = window.firebaseSet;
+    const dbOnValue = window.firebaseOnValue;
+
+    const chart = new Chart(document.getElementById("profitChart"), {
+      type: 'bar',
+      data: { labels: [], datasets: [{ label: 'Daily Net Profit (€)', data: [], backgroundColor: '#72f472' }] },
+      options: {
+        scales: {
+          y: { beginAtZero: true, ticks: { color: '#fff' } },
+          x: { ticks: { color: '#fff' } }
+        },
+        plugins: { legend: { labels: { color: '#fff' } } }
+      }
+    });
+
+    function handleInputs() {
+      const platform = document.getElementById("platform").value;
+      const price = parseFloat(document.getElementById("priceSold").value);
+      const cost = parseFloat(document.getElementById("cost").value);
+      if (isNaN(price) || isNaN(cost)) return;
+      let profit = 0, net = 0;
+
+      if (platform === "gameboost") {
+        const fee = price * 0.20 + 0.99 + (price * 0.04);
+        profit = price - cost;
+        net = profit - fee;
+      } else if (platform === "eloboost") {
+        let payoutRate = 0.70;
+        if (price > 150) payoutRate = 0.80;
+        else if (price > 100) payoutRate = 0.78;
+        else if (price > 75) payoutRate = 0.77;
+        else if (price > 50) payoutRate = 0.76;
+        else if (price > 20) payoutRate = 0.74;
+        profit = price * payoutRate - cost;
+        net = profit;
+      } else {
+        profit = price - cost;
+        net = profit;
+      }
+
+      document.getElementById("profit").value = profit.toFixed(2);
+      document.getElementById("net").value = net.toFixed(2);
+    }
+
+    window.addRow = async function addRow() {
+      const dateInput = document.getElementById("saleDate").value;
+      const date = new Date(dateInput).toISOString().split("T")[0];
+      const platform = document.getElementById("platform").value;
+      const price = parseFloat(document.getElementById("priceSold").value);
+      const cost = parseFloat(document.getElementById("cost").value);
+      const profit = parseFloat(document.getElementById("profit").value);
+      const net = parseFloat(document.getElementById("net").value);
+
+      if (!date || isNaN(price) || isNaN(cost) || isNaN(profit) || isNaN(net)) {
+        alert("Please fill all fields.");
+        return;
+      }
+
+      const entry = { date, platform, price, cost, profit, net };
+      const entryRef = dbPush(dbRef(db, 'sales'));
+      await dbSet(entryRef, entry);
+
+      dataStore.push(entry);
+      updateChart();
+      renderTable();
+
+      document.getElementById("saleDate").value = "";
+      document.getElementById("priceSold").value = "";
+      document.getElementById("cost").value = "";
+      document.getElementById("profit").value = "";
+      document.getElementById("net").value = "";
+    }
+
+    window.onload = () => {
+      dbOnValue(dbRef(db, 'sales'), snapshot => {
+        dataStore.length = 0;
+        const val = snapshot.val();
+        if (val) {
+          for (let id in val) dataStore.push(val[id]);
+          renderTable();
+          updateChart();
+        }
+      });
+    };
+  </script>
+</body>
+</html>

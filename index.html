@@ -51,14 +51,14 @@
       <label for="net">Net</label>
       <input type="number" id="net" step="0.01" readonly>
 
-      <button class="add-btn" onclick="addRow()">Add</button>
+      <button class="add-btn" id="addBtn">Add</button>
     </div>
   </div>
 
   <div class="main-content">
     <div class="filter-section">
       <label for="filter">Filter Chart:</label>
-      <select id="filter" onchange="updateChart()">
+      <select id="filter">
         <option value="all">All</option>
         <option value="today">Today</option>
         <option value="7days">Last 7 Days</option>
@@ -67,7 +67,7 @@
     </div>
     <div class="filter-section">
       <label for="sortTable">Sort Table:</label>
-      <select id="sortTable" onchange="renderTable()">
+      <select id="sortTable">
         <option value="newest">Newest First</option>
         <option value="oldest">Oldest First</option>
         <option value="netHigh">Highest Net</option>
@@ -83,10 +83,29 @@
     </table>
   </div>
 
-  <script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, push, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAvj20SkBJDs3S9K6dU4EbFNz2K_dni7bc",
+      authDomain: "sales-tracking-3a652.firebaseapp.com",
+      projectId: "sales-tracking-3a652",
+      storageBucket: "sales-tracking-3a652.appspot.com",
+      messagingSenderId: "25831699121",
+      appId: "1:25831699121:web:0feeb1990b6a47942ce890",
+      measurementId: "G-96VFZL3S4W",
+      databaseURL: "https://sales-tracking-3a652-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const dbRef = ref;
+    const dbPush = push;
+    const dbSet = set;
+    const dbOnValue = onValue;
+
     const dataStore = [];
-    const proxyUrl = "https://corsproxy.io/?";
-    const scriptUrl = "https://script.google.com/macros/s/AKfycby70R_LPFAhj_1dGZRaJPggTjc4udlVbT6UxdLDyfw/exec";
 
     const chart = new Chart(document.getElementById("profitChart"), {
       type: 'bar',
@@ -129,7 +148,7 @@
       document.getElementById("net").value = net.toFixed(2);
     }
 
-    function addRow() {
+    async function addRow() {
       const dateInput = document.getElementById("saleDate").value;
       const date = new Date(dateInput).toISOString().split("T")[0];
       const platform = document.getElementById("platform").value;
@@ -144,30 +163,18 @@
       }
 
       const entry = { date, platform, price, cost, profit, net };
+      const entryRef = dbPush(dbRef(db, 'sales'));
+      await dbSet(entryRef, entry);
 
-      fetch(proxyUrl + encodeURIComponent(scriptUrl), {
-        method: "POST",
-        body: JSON.stringify(entry),
-        headers: { "Content-Type": "application/json" }
-      })
-      .then(response => response.text())
-      .then(result => {
-        console.log("Posted to Google Sheets:", result);
-        dataStore.push(entry);
-        updateChart();
-        renderTable();
+      dataStore.push(entry);
+      updateChart();
+      renderTable();
 
-        // Clear fields
-        document.getElementById("saleDate").value = "";
-        document.getElementById("priceSold").value = "";
-        document.getElementById("cost").value = "";
-        document.getElementById("profit").value = "";
-        document.getElementById("net").value = "";
-      })
-      .catch(error => {
-        console.error("Error posting to Google Sheets:", error);
-        alert("Failed to post to Google Sheets. Check the console.");
-      });
+      document.getElementById("saleDate").value = "";
+      document.getElementById("priceSold").value = "";
+      document.getElementById("cost").value = "";
+      document.getElementById("profit").value = "";
+      document.getElementById("net").value = "";
     }
 
     function updateChart() {
@@ -205,7 +212,7 @@
     function renderTable() {
       const table = document.getElementById("salesTable");
       table.innerHTML = "";
-      const sortType = document.getElementById("sortTable")?.value || "newest";
+      const sortType = document.getElementById("sortTable").value || "newest";
       let sortedData = [...dataStore];
 
       if (sortType === "newest") sortedData.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -217,15 +224,13 @@
         const row = document.createElement("tr");
         row.innerHTML = `
           <td><input type="date" value="${entry.date}" onchange="editRow(${index}, 'date', this.value)"></td>
-          <td>
-            <select onchange="editRow(${index}, 'platform', this.value)">
-              <option value="gameboost" ${entry.platform === "gameboost" ? "selected" : ""}>Gameboost</option>
-              <option value="ebay" ${entry.platform === "ebay" ? "selected" : ""}>eBay</option>
-              <option value="eloboost" ${entry.platform === "eloboost" ? "selected" : ""}>Eloboost</option>
-              <option value="1v9" ${entry.platform === "1v9" ? "selected" : ""}>1v9.gg</option>
-              <option value="eldorado" ${entry.platform === "eldorado" ? "selected" : ""}>Eldorado</option>
-            </select>
-          </td>
+          <td><select onchange="editRow(${index}, 'platform', this.value)">
+            <option value="gameboost" ${entry.platform === "gameboost" ? "selected" : ""}>Gameboost</option>
+            <option value="ebay" ${entry.platform === "ebay" ? "selected" : ""}>eBay</option>
+            <option value="eloboost" ${entry.platform === "eloboost" ? "selected" : ""}>Eloboost</option>
+            <option value="1v9" ${entry.platform === "1v9" ? "selected" : ""}>1v9.gg</option>
+            <option value="eldorado" ${entry.platform === "eldorado" ? "selected" : ""}>Eldorado</option>
+          </select></td>
           <td><input type="number" step="0.01" value="${entry.net}" onchange="editRow(${index}, 'net', parseFloat(this.value))"></td>
           <td><button onclick="deleteRow(${index})">🗑️</button></td>
         `;
@@ -233,38 +238,33 @@
       });
     }
 
-    function deleteRow(index) {
+    window.editRow = function(index, field, value) {
+      dataStore[index][field] = value;
+      updateChart();
+    };
+
+    window.deleteRow = function(index) {
       if (confirm("Are you sure you want to delete this entry?")) {
         dataStore.splice(index, 1);
         renderTable();
         updateChart();
       }
-    }
+    };
 
-    function editRow(index, field, value) {
-      dataStore[index][field] = value;
-      updateChart();
-    }
+    document.getElementById("addBtn").addEventListener("click", addRow);
+    document.getElementById("filter").addEventListener("change", updateChart);
+    document.getElementById("sortTable").addEventListener("change", renderTable);
 
     window.onload = () => {
-      fetch(proxyUrl + encodeURIComponent(scriptUrl))
-        .then(res => res.json())
-        .then(data => {
-          data.slice(1).forEach(row => {
-            const entry = {
-              date: row[0],
-              platform: row[1],
-              price: parseFloat(row[2]),
-              cost: parseFloat(row[3]),
-              profit: parseFloat(row[4]),
-              net: parseFloat(row[5])
-            };
-            dataStore.push(entry);
-          });
+      dbOnValue(dbRef(db, 'sales'), snapshot => {
+        dataStore.length = 0;
+        const val = snapshot.val();
+        if (val) {
+          for (let id in val) dataStore.push(val[id]);
           renderTable();
           updateChart();
-        })
-        .catch(err => console.error("Failed to load existing data:", err));
+        }
+      });
     };
   </script>
 </body>
